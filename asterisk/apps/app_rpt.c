@@ -4814,7 +4814,7 @@ char	str[200];
 
 	if (!myrpt->keyed) return;
 
-	sprintf(str,"I %s %s",myrpt->name,data);
+	sprintf(str,"ID %s %s",myrpt->name,data);
 
 	wf.frametype = AST_FRAME_TEXT;
 	wf.subclass = 0;
@@ -4881,7 +4881,7 @@ static void mdc1200_cmd(struct rpt *myrpt, char *data)
 	int i;
 
 	busy = 0;
-	if ((data[0] == 'I') && (!strcmp(data,myrpt->lastmdc))) return;
+	if ((data[0] == 'RAC') || (data[0] == 'LID') && (!strcmp(data,myrpt->lastmdc))) return;
 	myval = (char *) my_variable_match(myrpt->cfg, myrpt->p.mdcmacro, data);
 	if (myval) 
 	{
@@ -4908,7 +4908,7 @@ static void mdc1200_cmd(struct rpt *myrpt, char *data)
 		}
 		rpt_mutex_unlock(&myrpt->lock);
 	}
- 	if ((data[0] == 'I') && (!busy)) strcpy(myrpt->lastmdc,data);
+ 	if ((data[0] == 'ID') && (!busy)) strcpy(myrpt->lastmdc,data);
 	return;
 }
 
@@ -4925,7 +4925,7 @@ struct	mdcparams *mdcp;
 		return;
 	}
 	memset(mdcp,0,sizeof(&mdcp));
-	mdcp->type[0] = 'A';
+	mdcp->type[0] = 'ACK';
 	mdcp->UnitID = UnitID;
 	rpt_telemetry(myrpt,MDC1200,(void *)mdcp);
 	return;
@@ -12194,9 +12194,9 @@ static int function_ilink(struct rpt *myrpt, char *param, char *digits, int comm
 #ifdef	_MDC_DECODE_H_
 		case 17:
 			myrpt->lastunit = 0xd00d;
-			mdc1200_cmd(myrpt,"ID00D");
-			mdc1200_notify(myrpt,NULL,"ID00D");
-			mdc1200_send(myrpt,"ID00D");
+			mdc1200_cmd(myrpt,"IDD00D");
+			mdc1200_notify(myrpt,NULL,"IDD00D");
+			mdc1200_send(myrpt,"IDD00D");
 			break;
 #endif
 		case 9: /* Send Text Message */
@@ -21008,11 +21008,29 @@ char tmpstr[512],lstr[MAXLINKLIST],lat[100],lon[100],elev[100];
 						ast_verbose("op: %02x, arg: %02x, UnitID: %04x\n",
 							op & 255,arg & 255,unitID);
 					}
-					/* if for PTT ID */
+					/* if for RAC */
 					if ((op == 1) && ((arg == 0) || (arg == 0x80)))
 					{
 						myrpt->lastunit = unitID;
-						sprintf(ustr,"I%04X",unitID);
+						sprintf(ustr,"RAC%04X",unitID);
+						mdc1200_notify(myrpt,NULL,ustr);
+						mdc1200_send(myrpt,ustr);
+						mdc1200_cmd(myrpt,ustr);
+					}
+					/* if for LEADING PTT ID */
+					if ((op == 1) && ((arg == 0) || (arg == 0x80)))
+					{
+						myrpt->lastunit = unitID;
+						sprintf(ustr,"LID%04X",unitID);
+						mdc1200_notify(myrpt,NULL,ustr);
+						mdc1200_send(myrpt,ustr);
+						mdc1200_cmd(myrpt,ustr);
+					}
+					/* if for TRAILING PTT ID */
+					if ((op == 1) && ((arg == 0) || (arg == 0x80)))
+					{
+						myrpt->lastunit = unitID;
+						sprintf(ustr,"TID%04X",unitID);
 						mdc1200_notify(myrpt,NULL,ustr);
 						mdc1200_send(myrpt,ustr);
 						mdc1200_cmd(myrpt,ustr);
@@ -21021,7 +21039,7 @@ char tmpstr[512],lstr[MAXLINKLIST],lat[100],lon[100],elev[100];
 					if ((op == 0) && ((arg == 0x81) || (arg == 0x80)))
 					{
 						myrpt->lastunit = unitID;
-						sprintf(ustr,"E%04X",unitID);
+						sprintf(ustr,"EMG%04X",unitID);
 						mdc1200_notify(myrpt,NULL,ustr);
 						mdc1200_send(myrpt,ustr);
 						mdc1200_cmd(myrpt,ustr);
@@ -21036,8 +21054,14 @@ char tmpstr[512],lstr[MAXLINKLIST],lat[100],lon[100],elev[100];
 					if (op == 0x46)
 					{
 						myrpt->lastunit = unitID;
-						sprintf(ustr,"S%04X-%X",unitID,arg & 0xf);
-
+						sprintf(ustr,"STS%04X-%X",unitID,arg & 0xf);
+					}
+					/* if for MSG (MESSAGE)  */
+					if (op == 0x46)
+					{
+						myrpt->lastunit = unitID;
+						sprintf(ustr,"MSG%04X-%X",unitID,arg & 0xf);
+					}
 
 #ifdef	_MDC_ENCODE_H_
 						mdc1200_ack_status(myrpt,unitID);
@@ -21067,9 +21091,9 @@ char tmpstr[512],lstr[MAXLINKLIST],lat[100],lon[100],elev[100];
 					if ((op == 0x35) && (arg = 0x89))
 					{
 						/* if is Alert */
-						if (ex1 & 1) sprintf(ustr,"A%02X%02X-%04X",ex3 & 255,ex4 & 255,unitID);
+						if (ex1 & 1) sprintf(ustr,"ALERT%02X%02X-%04X",ex3 & 255,ex4 & 255,unitID);
 						/* otherwise is selcall */
-						else  sprintf(ustr,"S%02X%02X-%04X",ex3 & 255,ex4 & 255,unitID);
+						else  sprintf(ustr,"SEL%02X%02X-%04X",ex3 & 255,ex4 & 255,unitID);
 						mdc1200_notify(myrpt,NULL,ustr);
 						mdc1200_send(myrpt,ustr);
 						mdc1200_cmd(myrpt,ustr);
@@ -25518,7 +25542,7 @@ static char *mdc_descrip = "  MDC1200Gen(Type|UnitID[|DestID|SubCode]):  Generat
 "     Subcode '8205' is Voice Selective Call for Spectra ('Call')\n"
 "     Subcode '8015' is Voice Selective Call for Maxtrac ('SC') or \n"
 "          Astro-Saber('Call')\n"
-"     Subcode '810D' is Call Alert (like Maxtrac 'CA')\\n\n";
+"     Subcode '810D' is Call Alert (like Maxtrac 'CA') CAMAX (810D) SCMAX (8015) CALL16 (8205) PAGE16 (?) CALL25 (8015) PAGE25 (810D)\\n\n";
 
 static void mdcgen_release(struct ast_channel *chan, void *params)
 {
@@ -25547,32 +25571,61 @@ static void * mdcgen_alloc(struct ast_channel *chan, void *params)
 		ast_free(ps);
 		return NULL;
 	}
-	if (p->type[0] == 'I')
+	if (p->type[0] == 'ID')
 	{
 		mdc_encoder_set_packet(ps->mdc,1,0x80,p->UnitID);
 	}
-	else if (p->type[0] == 'E')
+	else if (p->type[0] == 'EMG')
 	{
 		mdc_encoder_set_packet(ps->mdc,0,0x80,p->UnitID);
 	}
-	else if (p->type[0] == 'S')
+	else if (p->type[0] == 'STS')
 	{
 		mdc_encoder_set_packet(ps->mdc,0x46,p->type[1] - '0',p->UnitID);
 	}
-	else if (p->type[0] == 'C')
+	else if (p->type[0] == 'MSG')
+	{
+		mdc_encoder_set_packet(ps->mdc,0x47,p->type[1] - '0',p->UnitID);
+	}
+	else if (p->type[0] == 'SCMAX')
 	{
 		mdc_encoder_set_double_packet(ps->mdc,0x35,0x89,p->DestID,p->subcode >> 8,
 			p->subcode & 0xff,p->UnitID >> 8,p->UnitID & 0xff);
 	}
-	else if (p->type[0] == 'A')
+	else if (p->type[0] == 'CAMAX')
+	{
+		mdc_encoder_set_double_packet(ps->mdc,0x35,0x89,p->DestID,p->subcode >> 8,
+			p->subcode & 0xff,p->UnitID >> 8,p->UnitID & 0xff);
+	}
+	else if (p->type[0] == 'CALL16')
+	{
+		mdc_encoder_set_double_packet(ps->mdc,0x35,0x89,p->DestID,p->subcode >> 8,
+			p->subcode & 0xff,p->UnitID >> 8,p->UnitID & 0xff);
+	}
+	else if (p->type[0] == 'CALL25')
+	{
+		mdc_encoder_set_double_packet(ps->mdc,0x35,0x89,p->DestID,p->subcode >> 8,
+			p->subcode & 0xff,p->UnitID >> 8,p->UnitID & 0xff);
+	}
+	else if (p->type[0] == 'PAGE16')
+	{
+		mdc_encoder_set_double_packet(ps->mdc,0x35,0x89,p->DestID,p->subcode >> 8,
+			p->subcode & 0xff,p->UnitID >> 8,p->UnitID & 0xff);
+	}
+	else if (p->type[0] == 'PAGE25')
+	{
+		mdc_encoder_set_double_packet(ps->mdc,0x35,0x89,p->DestID,p->subcode >> 8,
+			p->subcode & 0xff,p->UnitID >> 8,p->UnitID & 0xff);
+	}
+	else if (p->type[0] == 'ACK')
 	{
 		mdc_encoder_set_packet(ps->mdc,0x23,0,p->UnitID);
 	}
-	else if (p->type[0] == 'K') // kill a unit W9CR
+	else if (p->type[0] == 'KILL') // kill a unit W9CR
 	{
 		mdc_encoder_set_packet(ps->mdc,(unsigned char)0x22b,0x00,p->UnitID);
 	}
-	else if (p->type[0] == 'U') // UnKill a unit W9CR
+	else if (p->type[0] == 'UNKILL') // UnKill a unit W9CR
 	{
 		mdc_encoder_set_packet(ps->mdc,0x2b,0x0c,p->UnitID);
 	}
