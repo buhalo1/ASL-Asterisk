@@ -4908,13 +4908,30 @@ static void mdc1200_cmd(struct rpt *myrpt, char *data)
 		}
 		rpt_mutex_unlock(&myrpt->lock);
 	}
- 	if ((data[0] == 'ID') && (!busy)) strcpy(myrpt->lastmdc,data);
+ 	if ((data[0] == 'RAC') || (data[0] == 'LID') && (!busy)) strcpy(myrpt->lastmdc,data);
 	return;
 }
 
 #ifdef	_MDC_ENCODE_H_
 
 static void mdc1200_ack_status(struct rpt *myrpt, short UnitID)
+{
+struct	mdcparams *mdcp;
+
+	mdcp = ast_calloc(1,sizeof(struct mdcparams));
+	if (!mdcp)
+	{
+		ast_log(LOG_ERROR,"Cannot alloc!!\n");
+		return;
+	}
+	memset(mdcp,0,sizeof(&mdcp));
+	mdcp->type[0] = 'ACK';
+	mdcp->UnitID = UnitID;
+	rpt_telemetry(myrpt,MDC1200,(void *)mdcp);
+	return;
+}
+
+static void mdc1200_ack_message(struct rpt *myrpt, short UnitID)
 {
 struct	mdcparams *mdcp;
 
@@ -9389,7 +9406,7 @@ struct	mdcparams *mdcp;
 		mdcp = (struct mdcparams *)mytele->submode.p;
 		if (mdcp)
 		{
-			if (mdcp->type[0] != 'A')
+			if (mdcp->type[0] != 'ACK')
 			{
 				if (wait_interval(myrpt, DLY_TELEM,  mychannel) == -1)
 				{
@@ -13646,7 +13663,7 @@ struct	ast_frame wf;
 		rpt_mutex_unlock(&myrpt->lock);
 		return;
 	}
-	if (tmp[0] == 'I')
+	if (tmp[0] == 'LID') || (tmp[0] == 'TID')
 	{
 		if (sscanf(tmp,"%s %s %s",cmd,src,dest) != 3)
 		{
@@ -18624,7 +18641,7 @@ int	seq,res;
 	if (tmp[0] == 'T') return 0;
 
 #ifndef	DO_NOT_NOTIFY_MDC1200_ON_REMOTE_BASES
-	if (tmp[0] == 'I')
+	if (tmp[0] == 'LID') || (tmp[0] == 'TID')
 	{
 		if (sscanf(tmp,"%s %s %s",cmd,src,dest) != 3)
 		{
@@ -25533,8 +25550,8 @@ static int manager_rpt_status(struct mansession *s, const struct message *m)
 static char *mdc_app = "MDC1200Gen";
 static char *mdc_synopsis = "MDC1200 Generator";
 static char *mdc_descrip = "  MDC1200Gen(Type|UnitID[|DestID|SubCode]):  Generates MDC-1200\n"
-"  burst for given UnitID. Type is 'I' for PttID, 'E' for\n"
-"  Emergency, and 'C' for Call (SelCall or Alert), or 'SX' for STS\n"
+"  burst for given UnitID. Type is 'ID' for PttID, 'EMG' for\n"
+"  Emergency, and 'C' for Call (SelCall or Alert), or 'STSX' for STS\n"
 "  (status), where X is 0-F (indicating the status code). DestID and\n"
 "  subcode are only specified for the 'C' type message. DestID is\n"
 "  The MDC1200 ID of the radio being called, and the subcodes are\n"
